@@ -125,6 +125,81 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	return content
 }
 
+func (s *PublicTxPoolAPI) Hashes() map[string][]common.Hash {
+	hashes := map[string][]common.Hash{}
+	pending, queue := s.b.TxPoolContent()
+
+	// Flatten the pending transactions
+	for _, txs := range pending {
+		for _, tx := range txs {
+			hashes["pending"] = append(hashes["pending"], tx.Hash())
+		}
+
+	}
+	// Flatten the queued transactions
+	for _, txs := range queue {
+		for _, tx := range txs {
+			hashes["queued"] = append(hashes["queued"], tx.Hash())
+		}
+	}
+
+	return hashes
+}
+
+func (s *PublicTxPoolAPI) HashesByAddress(address common.Address) []common.Hash {
+	hashes := []common.Hash{}
+	pending, queue := s.b.TxPoolContent()
+
+	// Flatten the pending transactions
+	knownPendingTransactions := SearchStrings(pending, address)
+	knownQueuedTransactions := SearchStrings(queue, address)
+
+	for _, txs := range knownPendingTransactions {
+		for _, tx := range txs {
+			hashes["pending"] = append(hashes["pending"], tx.Hash())
+		}
+
+	}
+	// Flatten the queued transactions
+	for _, txs := range knownQueuedTransactions {
+		for _, tx := range txs {
+			hashes["queued"] = append(hashes["queued"], tx.Hash())
+		}
+	}
+
+	return hashes
+}
+
+// Content returns the transactions contained within the transaction pool.
+func (s *PublicTxPoolAPI) ByAddress(address common.address) map[string]map[string]map[string]*RPCTransaction {
+	content := map[string]map[string]map[string]*RPCTransaction{
+		"pending": make(map[string]map[string]*RPCTransaction),
+		"queued":  make(map[string]map[string]*RPCTransaction),
+	}
+	pending, queue := s.b.TxPoolContent()
+
+	knownPending := SearchStrings(pending, address)
+	knownQueued := SearchStrings(queue, address)
+
+	// Flatten the pending transactions
+	for account, txs := range knownPending {
+		dump := make(map[string]*RPCTransaction)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+		}
+		content["pending"][account.Hex()] = dump
+	}
+	// Flatten the queued transactions
+	for account, txs := range knownQueued {
+		dump := make(map[string]*RPCTransaction)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+		}
+		content["queued"][account.Hex()] = dump
+	}
+	return content
+}
+
 // Status returns the number of pending and queued transaction in the pool.
 func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 	pending, queue := s.b.Stats()
